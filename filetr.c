@@ -185,14 +185,17 @@ int main(){
                     if(data[i].fp==NULL){
                         data[i].fp = fopen(data[i].filename,"rb");
                         if(!data[i].fp){
-                            
-                            closesocket(s);
-                            memset(&data[i],0,sizeof(user_info));
-                            data[i].fp=NULL;
-                            printf("file not openning error");
-                            continue;
-                        }
-                        fseek(data[i].fp,0,SEEK_END);
+			    char *not_found_header = "HTTP/1.1 404 Not Found\r\n"
+                        	     "Content-Length: 0\r\n"
+                        	     "Connection: close\r\n\r\n";
+			    send(s, not_found_header, strlen(not_found_header), 0);
+    
+			    printf("404 Not Found sent for file: %s\n", data[i].filename);
+			    closesocket(s);
+			    memset(&data[i], 0, sizeof(user_info));
+			    continue;
+			}
+			fseek(data[i].fp,0,SEEK_END);
                         data[i].filesize=ftell(data[i].fp);
                         fseek(data[i].fp,0,SEEK_SET);
                     }
