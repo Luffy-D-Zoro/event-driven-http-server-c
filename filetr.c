@@ -145,7 +145,8 @@ int main(){
                 //     data[i].filesize=0;
                     char url[256];
                     char version[32];
-                    int parsed =sscanf(recv_buffer,"%s %s %s",data[i].method,url,version);
+                    // This is to prevent buffer overflows(stopping malicious actors from entering junk urls to fill in, beyond which they could input bad code) (leaving 1 byte for null terminator)
+                    int parsed = sscanf(recv_buffer, "%9s %255s %31s", data[i].method, url, version);
                     if(parsed<2){
                         printf("Bad request\n");
                         closesocket(s);
@@ -159,6 +160,14 @@ int main(){
                     }
                     if(strlen(data[i].filename)==0){
                         strcpy(data[i].filename,"index.html");
+                    }
+
+		    // Security Fix: Prevent Path Traversal
+                    if(strstr(data[i].filename, "..") != NULL) {
+                        printf("Security alert: Directory traversal attempt blocked from user %d\n", i);
+                        closesocket(s);
+                        memset(&data[i], 0, sizeof(user_info));
+                        continue;
                     }
 
                     printf("Parsed file: [%s]\n",data[i].filename);
