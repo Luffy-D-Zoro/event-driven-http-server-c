@@ -1,26 +1,47 @@
 # 🚀 Event-Driven HTTP File Server in C
 
-A lightweight **non-blocking HTTP file server** implemented in pure C using **WinSock** and the `select()` system call.
-This project demonstrates low-level networking, event-driven architecture, and concurrent client handling without multithreading.
+A lightweight **HTTP file server** implemented in pure C using Linux sockets and the `select()` system call.
+
+This project demonstrates low-level networking, event-driven architecture, static file serving, and raw file upload handling without using any external web framework.
 
 ---
 
 ## 📌 Features
 
-* ⚡ Non-blocking I/O using `select()`
+* ⚡ Event-driven I/O using `select()`
 * 👥 Handles multiple client connections
-* 📂 Serves files over HTTP
-* 🧠 Event-driven design (single-threaded)
-* 📦 Sends proper HTTP headers
-* 📄 Supports file download via browser
+* 📂 Serves static files over HTTP using `GET`
+* 📤 Supports raw file upload using `POST`
+* 🌐 Can upload files from phone/browser over local Wi-Fi
+* 🧠 Single-threaded design
+* 📦 Sends HTTP response headers
+* 🧾 Basic MIME type support
+* 🛡️ Basic upload filename safety checks
+* 🐧 Linux socket API support
 
 ---
 
 ## 🧱 Tech Stack
 
 * Language: **C**
-* Networking: **WinSock2**
+* OS: **Linux**
+* Networking: **POSIX sockets**
 * I/O Model: **select()-based multiplexing**
+* Protocol: **HTTP/1.1 basics**
+
+---
+
+## 📁 Project Structure
+
+```txt
+.
+├── server.c
+├── public/
+│   └── index.html
+├── uploads/
+├── Makefile
+└── README.md
+```
 
 ---
 
@@ -30,15 +51,24 @@ This project demonstrates low-level networking, event-driven architecture, and c
 2. Uses `select()` to monitor:
 
    * New incoming connections
-   * Read events (client requests)
-   * Write events (file transfer)
-3. Parses HTTP request (method + file path)
-4. Opens requested file
-5. Sends:
+   * Read events from clients
+   * Write events for file transfer
+3. Parses the HTTP request line:
 
-   * HTTP response headers
-   * File data in chunks
-6. Closes connection after transfer
+   * Method
+   * Path
+   * HTTP version
+4. For `GET` requests:
+
+   * Finds the requested file inside `public/`
+   * Sends HTTP headers
+   * Sends file data in chunks
+5. For `POST /upload/<filename>` requests:
+
+   * Reads `Content-Length`
+   * Reads raw request body
+   * Saves uploaded file inside `uploads/`
+6. Closes the connection after response
 
 ---
 
@@ -46,120 +76,265 @@ This project demonstrates low-level networking, event-driven architecture, and c
 
 ### 🔧 Requirements
 
-* Windows OS
-* GCC (MinGW) or Visual Studio
+* Linux
+* GCC
+* Make
 
-### 🛠️ Compile
+Install build tools on Arch Linux:
 
 ```bash
-gcc server.c -lws2_32 -o server
+sudo pacman -S --needed base-devel gcc make
 ```
 
-### ▶️ Run
+---
+
+## 🛠️ Compile
+
+```bash
+make
+```
+
+Or manually:
+
+```bash
+gcc -Wall -Wextra -Werror -std=c11 -g server.c -o server
+```
+
+---
+
+## ▶️ Run
+
+```bash
+make run
+```
+
+Or:
 
 ```bash
 ./server
 ```
 
-Server will start at:
+Server starts at:
 
-```
+```txt
 http://127.0.0.1:5001
 ```
 
 ---
 
-## 📥 Example Usage
+## 📂 Serving Files
+
+Place files inside the `public/` folder.
+
+Example:
+
+```txt
+public/index.html
+public/style.css
+public/image.png
+```
 
 Open in browser:
 
+```txt
+http://127.0.0.1:5001/
 ```
+
+or:
+
+```txt
 http://127.0.0.1:5001/index.html
 ```
 
-Or using curl:
+---
+
+## 📤 Uploading Files
+
+The server supports raw file upload using:
+
+```txt
+POST /upload/<filename>
+```
+
+Uploaded files are saved inside:
+
+```txt
+uploads/
+```
+
+Example:
 
 ```bash
-curl http://127.0.0.1:5001/index.html --output index.html
+curl -X POST http://127.0.0.1:5001/upload/test.txt \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @test.txt
+```
+
+After upload:
+
+```bash
+cat uploads/test.txt
 ```
 
 ---
 
-## 📊 Performance & Scalability Testing
+## 📱 Uploading From Phone
 
-The server was benchmarked using **Apache Bench (`ab`)**.
+Make sure your phone and laptop are connected to the same Wi-Fi.
 
-### 🧪 Test Setup
+Find your laptop IP:
 
+```bash
+ip addr
+```
+
+Example IP:
+
+```txt
+192.168.29.169
+```
+
+Open this on your phone browser:
+
+```txt
+http://192.168.29.169:5001
+```
+
+The upload page allows selecting a file from the phone and sending it to the server.
+
+Supported upload examples:
+
+* Images: `.jpg`, `.png`, `.webp`
+* Videos: `.mp4`, `.mkv`
+* Audio: `.mp3`, `.wav`
+* Documents: `.pdf`, `.txt`, `.md`
+* Archives: `.zip`, `.tar.gz`
+* Source files: `.c`, `.cpp`, `.h`
+
+---
+
+## 🌐 Supported HTTP Methods
+
+| Method | Path               | Description                      |
+| ------ | ------------------ | -------------------------------- |
+| `GET`  | `/`                | Serves `public/index.html`       |
+| `GET`  | `/filename`        | Serves file from `public/`       |
+| `POST` | `/upload/filename` | Uploads raw file into `uploads/` |
+
+---
+
+## 🧪 Example Usage
+
+### Download file
+
+```bash
+curl http://127.0.0.1:5001/index.html
+```
+
+### Upload file
+
+```bash
+curl -X POST http://127.0.0.1:5001/upload/notes.txt \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @notes.txt
+```
+
+---
+
+## ⚠️ Limitations
+
+* Uses `select()`, which does not scale well for very high connection counts
+* Fixed client limit using `MAX_USER`
+* File I/O is blocking
+* HTTP parser is basic
+* No authentication
+* No HTTPS
+* No multipart form-data parser yet
+* No persistent connection support
+* Uploads should only be used on trusted local networks
+
+---
+
+## 📊 Benchmarking
+
+The earlier Windows WinSock version of this server was benchmarked using **Apache Bench (`ab`)**.
+
+### 🧪 Previous Benchmark: WinSock + select() Version
+
+Test setup:
+
+* OS: Windows
 * Server: `127.0.0.1:5001`
-* File: `index.html` (493 bytes)
+* File: `index.html` around 493 bytes
 * Tool: Apache Bench (`ab`)
 
----
-
-### 📈 Results
-
 | Concurrency | Requests | Req/sec | Avg Latency | Failed Requests | Status     |
-| ----------- | -------- | ------- | ----------- | --------------- | ---------- |
-| 1           | 100      | 87.44   | 11 ms       | 0               | ✅ Stable   |
-| 5           | 500      | 102.46  | 48 ms       | 0               | ✅ Stable   |
-| 10          | 1000     | 104.74  | 95 ms       | 0               | ✅ Stable   |
-| 50          | 2000     | 22.57   | 2214 ms     | 0               | ❌ Degraded |
-
----
+| ----------- | -------: | ------: | ----------: | --------------: | ---------- |
+| 1           |      100 |   87.44 |       11 ms |               0 | ✅ Stable   |
+| 5           |      500 |  102.46 |       48 ms |               0 | ✅ Stable   |
+| 10          |     1000 |  104.74 |       95 ms |               0 | ✅ Stable   |
+| 50          |     2000 |   22.57 |     2214 ms |               0 | ❌ Degraded |
 
 ### 📌 Observations
 
-* Stable performance up to **~10 concurrent clients**
-* Peak throughput: **~104 requests/sec**
-* At higher concurrency:
+* The server was stable up to around **10 concurrent clients**.
+* Peak throughput was around **104 requests/sec**.
+* At higher concurrency, throughput dropped and latency increased sharply.
+* No failed requests were observed, so the server remained functionally correct under load.
 
-  * Throughput drops significantly
-  * Latency increases sharply
-* No failed requests → system remains functionally correct under load
+### ⚠️ Note
+
+These benchmark results are from the earlier **Windows WinSock implementation**.
+The current Linux version has added raw file upload support and should be benchmarked separately.
+
+Future benchmarking should include:
+
+* Static file download performance
+* Raw file upload performance
+* Different file sizes
+* Higher concurrency tests
+* Comparison between `select()` and future `epoll` version
 
 ---
 
-### ⚠️ Limitations
+## 🚀 Future Improvements
 
-* Fixed client limit (`MAX_USER = 10`)
-* `select()` does not scale efficiently for large numbers of connections
-* Blocking file I/O (`fread`)
-* No MIME type handling
-* Windows-only (WinSock)
-
----
-
-### 🚀 Future Improvements
-
-* Replace `select()` with:
-
-  * `epoll` (Linux)
-  * IOCP (Windows)
-* Add MIME type support
-* Improve HTTP parsing
-* Implement non-blocking file I/O
-* Add logging and monitoring
-* Support persistent connections (Keep-Alive)
+* Replace `select()` with `epoll`
+* Improve HTTP request parsing
+* Add proper request state machine
+* Add multipart form-data upload support
+* Add upload size limits
+* Add authentication for uploads
+* Add logging
+* Add better MIME type detection
+* Add directory listing
+* Add config file support
+* Add benchmarking results for the Linux version
 
 ---
 
 ## 🧠 What I Learned
 
-* Low-level socket programming in C
-* Event-driven server design
-* Handling multiple clients without threads
-* HTTP protocol basics
-* Performance benchmarking using Apache Bench
-* Identifying and analyzing system bottlenecks
+* Linux socket programming in C
+* Difference between Windows WinSock and POSIX sockets
+* Using `select()` for handling multiple clients
+* HTTP request parsing basics
+* Serving static files over HTTP
+* Handling `GET` and `POST` requests
+* Reading `Content-Length`
+* Saving raw uploaded files
+* Testing server from browser, curl, and phone
+* Understanding limitations of `select()`-based servers
 
 ---
 
 ## 🎯 Conclusion
 
-This project demonstrates a working **event-driven concurrent HTTP server** and highlights the practical limitations of `select()`-based designs under high load.
+This project is a simple but practical HTTP file server built from scratch in C.
 
-It serves as a strong foundation for building scalable, high-performance network systems.
+It supports both downloading files from the server and uploading files to the server over HTTP. It is not meant to replace production servers like Nginx, but it is a strong learning project for understanding sockets, HTTP, event-driven networking, and server internals.
+
+This project also acts as a foundation for building a more advanced Linux-based server using `epoll`, routing, config parsing, reverse proxying, and load balancing.
 
 ---
 
