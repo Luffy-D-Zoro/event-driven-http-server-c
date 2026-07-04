@@ -2,7 +2,7 @@
 
 A lightweight **HTTP file server** implemented in pure C using Linux sockets and the `select()` system call.
 
-This project demonstrates low-level networking, event-driven architecture, static file serving, and raw file upload handling without using any external web framework.
+This project demonstrates low-level networking, event-driven architecture, static file serving, basic HTTP parsing, and raw file upload handling without using any external web framework.
 
 ---
 
@@ -10,14 +10,15 @@ This project demonstrates low-level networking, event-driven architecture, stati
 
 * ⚡ Event-driven I/O using `select()`
 * 👥 Handles multiple client connections
-* 📂 Serves static files over HTTP using `GET`
+* 📂 Serves files over HTTP using `GET`
 * 📤 Supports raw file upload using `POST`
 * 🌐 Can upload files from phone/browser over local Wi-Fi
 * 🧠 Single-threaded design
 * 📦 Sends HTTP response headers
 * 🧾 Basic MIME type support
+* 🛡️ Basic path traversal protection
 * 🛡️ Basic upload filename safety checks
-* 🐧 Linux socket API support
+* 🐧 Linux POSIX socket API support
 
 ---
 
@@ -43,6 +44,10 @@ This project demonstrates low-level networking, event-driven architecture, stati
 └── README.md
 ```
 
+`public/index.html` is used as the default page for `/`.
+
+Uploaded files are saved inside the `uploads/` folder.
+
 ---
 
 ## 📁 How It Works
@@ -60,15 +65,16 @@ This project demonstrates low-level networking, event-driven architecture, stati
    * HTTP version
 4. For `GET` requests:
 
-   * Finds the requested file inside `public/`
-   * Sends HTTP headers
+   * `GET /` serves `public/index.html`
+   * `GET /filename` serves a file from the server's current working directory
+   * Sends HTTP response headers
    * Sends file data in chunks
 5. For `POST /upload/<filename>` requests:
 
    * Reads `Content-Length`
-   * Reads raw request body
-   * Saves uploaded file inside `uploads/`
-6. Closes the connection after response
+   * Reads the raw request body
+   * Saves the uploaded file inside `uploads/`
+6. Closes the connection after the response
 
 ---
 
@@ -84,6 +90,12 @@ Install build tools on Arch Linux:
 
 ```bash
 sudo pacman -S --needed base-devel gcc make
+```
+
+Create required folders:
+
+```bash
+mkdir -p public uploads
 ```
 
 ---
@@ -124,27 +136,35 @@ http://127.0.0.1:5001
 
 ## 📂 Serving Files
 
-Place files inside the `public/` folder.
+The server supports file serving using `GET`.
 
-Example:
-
-```txt
-public/index.html
-public/style.css
-public/image.png
-```
-
-Open in browser:
+Opening:
 
 ```txt
 http://127.0.0.1:5001/
 ```
 
-or:
+serves:
 
 ```txt
-http://127.0.0.1:5001/index.html
+public/index.html
 ```
+
+Opening:
+
+```txt
+http://127.0.0.1:5001/example.txt
+```
+
+serves:
+
+```txt
+example.txt
+```
+
+from the server's current working directory.
+
+Note: In the current version, only the default homepage is served from `public/index.html`. Other requested files are opened relative to the directory where the server is running.
 
 ---
 
@@ -215,11 +235,11 @@ Supported upload examples:
 
 ## 🌐 Supported HTTP Methods
 
-| Method | Path               | Description                      |
-| ------ | ------------------ | -------------------------------- |
-| `GET`  | `/`                | Serves `public/index.html`       |
-| `GET`  | `/filename`        | Serves file from `public/`       |
-| `POST` | `/upload/filename` | Uploads raw file into `uploads/` |
+| Method | Path               | Description                               |
+| ------ | ------------------ | ----------------------------------------- |
+| `GET`  | `/`                | Serves `public/index.html`                |
+| `GET`  | `/filename`        | Serves file from current server directory |
+| `POST` | `/upload/filename` | Uploads raw file into `uploads/`          |
 
 ---
 
@@ -241,17 +261,20 @@ curl -X POST http://127.0.0.1:5001/upload/notes.txt \
 
 ---
 
-## ⚠️ Limitations
+## 🧾 MIME Type Support
 
-* Uses `select()`, which does not scale well for very high connection counts
-* Fixed client limit using `MAX_USER`
-* File I/O is blocking
-* HTTP parser is basic
-* No authentication
-* No HTTPS
-* No multipart form-data parser yet
-* No persistent connection support
-* Uploads should only be used on trusted local networks
+The server includes basic MIME type handling for common file types:
+
+| Extension        | Content-Type               |
+| ---------------- | -------------------------- |
+| `.html`          | `text/html`                |
+| `.css`           | `text/css`                 |
+| `.js`            | `application/javascript`   |
+| `.png`           | `image/png`                |
+| `.jpg` / `.jpeg` | `image/jpeg`               |
+| `.txt`           | `text/plain`               |
+| `.pdf`           | `application/pdf`          |
+| unknown          | `application/octet-stream` |
 
 ---
 
@@ -285,6 +308,7 @@ Test setup:
 ### ⚠️ Note
 
 These benchmark results are from the earlier **Windows WinSock implementation**.
+
 The current Linux version has added raw file upload support and should be benchmarked separately.
 
 Future benchmarking should include:
@@ -297,11 +321,28 @@ Future benchmarking should include:
 
 ---
 
+## ⚠️ Limitations
+
+* Uses `select()`, which does not scale well for very high connection counts
+* Fixed client limit using `MAX_USER`
+* File I/O is blocking
+* HTTP parser is basic
+* No authentication
+* No HTTPS
+* No multipart form-data parser yet
+* No persistent connection support
+* No fixed public root directory for all static files yet
+* No advanced path normalization beyond basic checks
+* Uploads should only be used on trusted local networks
+
+---
+
 ## 🚀 Future Improvements
 
 * Replace `select()` with `epoll`
 * Improve HTTP request parsing
-* Add proper request state machine
+* Add a proper request state machine
+* Serve all static files from a fixed root directory
 * Add multipart form-data upload support
 * Add upload size limits
 * Add authentication for uploads
@@ -319,11 +360,11 @@ Future benchmarking should include:
 * Difference between Windows WinSock and POSIX sockets
 * Using `select()` for handling multiple clients
 * HTTP request parsing basics
-* Serving static files over HTTP
+* Serving files over HTTP
 * Handling `GET` and `POST` requests
 * Reading `Content-Length`
 * Saving raw uploaded files
-* Testing server from browser, curl, and phone
+* Testing the server from browser, curl, and phone
 * Understanding limitations of `select()`-based servers
 
 ---
