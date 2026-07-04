@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload to C Server</title>
+</head>
+<body>
+    <h2>Upload file to laptop</h2>
+
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">Upload</button>
+
+    <p id="status"></p>
+
+    <script>
+        async function uploadFile() {
+            const file = document.getElementById("fileInput").files[0];
+
+            if (!file) {
+                alert("Select a file first");
+                return;
+            }
+
+            const res = await fetch("/upload/" + encodeURIComponent(file.name), {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/octet-stream"
+                },
+                body: file
+            });
+
+            const text = await res.text();
+            document.getElementById("status").innerText = text;
+        }
+    </script>
+</body>
+</html>
